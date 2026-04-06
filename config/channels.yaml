@@ -1,0 +1,22 @@
+# Channel-to-Notebook Mapping
+#
+# Map Slack channel IDs to NotebookLM notebook IDs.
+# To find your channel ID: right-click channel name → View channel details → scroll to bottom.
+# To find your notebook ID: it's the UUID in the NotebookLM URL:
+#   https://notebooklm.google.com/notebook/<notebook-id>
+
+channels:
+  # Example: map a specific channel to a specific notebook
+  # C0123456789:
+  #   notebook_id: "1395e9ba-90ba-45b0-a435-761f0e4ce313"
+  #   name: "Engineering Docs"
+
+  # Default notebook used when a channel has no specific mapping
+  default:
+    notebook_id: "1395e9ba-90ba-45b0-a435-761f0e4ce313"
+    name: "Default Notebook"
+
+# Claude fallback settings (used when NotebookLM chat.ask() fails)
+claude_fallback:
+  enabled: true
+  model: "claude-sonnet-4-6"

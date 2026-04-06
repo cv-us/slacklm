@@ -1,0 +1,9 @@
+services:
+  slacklm:
+    build: .
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./storage_state.json:/app/storage_state.json:ro
+      - ./config/channels.yaml:/app/config/channels.yaml:ro
