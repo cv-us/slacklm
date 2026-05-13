@@ -23,21 +23,17 @@ class Answer:
 
 class NotebookLMWrapper:
     def __init__(self):
-        self._client: NotebookLMClient | None = None
+        pass
 
-    async def _get_client(self) -> NotebookLMClient:
-        if self._client is None:
-            self._client = await NotebookLMClient.from_storage()
-        return self._client
+    async def _run_with_client(self, func):
+        async with await NotebookLMClient.from_storage() as client:
+            return await func(client)
 
     async def close(self):
-        if self._client is not None:
-            await self._client.close()
-            self._client = None
+        pass
 
     async def ask(self, notebook_id: str, question: str) -> Answer:
-        client = await self._get_client()
-        try:
+        async def _ask(client):
             response = await client.chat.ask(notebook_id, question)
             citations = []
             sources = []
@@ -53,13 +49,15 @@ class NotebookLMWrapper:
                 ]
             answer_text = response.answer if hasattr(response, "answer") else str(response)
             return Answer(text=answer_text, citations=citations, sources=sources)
+
+        try:
+            return await self._run_with_client(_ask)
         except Exception as e:
             logger.error("NotebookLM chat.ask() failed: %s", e)
             raise
 
     async def list_sources(self, notebook_id: str) -> list[Source]:
-        client = await self._get_client()
-        try:
+        async def _list(client):
             notebooks = await client.notebooks.list()
             notebook = None
             for nb in notebooks:
@@ -87,19 +85,24 @@ class NotebookLMWrapper:
                 )
                 for i, s in enumerate(raw_sources)
             ]
+
+        try:
+            return await self._run_with_client(_list)
         except Exception as e:
             logger.error("Failed to list sources: %s", e)
             raise
 
     async def get_source_content(self, notebook_id: str, source_id: str) -> str:
-        client = await self._get_client()
-        try:
+        async def _get(client):
             if hasattr(client, "sources") and hasattr(client.sources, "get"):
                 source = await client.sources.get(notebook_id, source_id)
                 return getattr(source, "content", getattr(source, "text", str(source)))
             else:
                 logger.warning("Source content retrieval not available")
                 return ""
+
+        try:
+            return await self._run_with_client(_get)
         except Exception as e:
             logger.error("Failed to get source content: %s", e)
             raise

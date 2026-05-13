@@ -5,5 +5,5 @@ services:
     env_file:
       - .env
     volumes:
-      - ./storage_state.json:/root/.notebooklm/profiles/default/storage_state.json:ro
+      - ./storage_state.json:/root/.notebooklm/profiles/default/storage_state.json
       - ./config/channels.yaml:/app/config/channels.yaml:ro
