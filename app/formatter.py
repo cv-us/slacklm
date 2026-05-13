@@ -1,14 +1,31 @@
+import re
+
 from app.notebooklm_client import Answer
 
 MAX_TEXT_BLOCK_LENGTH = 3000
+
+
+def _markdown_to_plain(text: str) -> str:
+    """Convert markdown formatting to plain readable text."""
+    # Remove bold markers: **text** or __text__
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    # Remove italic markers: *text* or _text_
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'\1', text)
+    # Remove heading markers: ### text -> text
+    text = re.sub(r'^#{1,6}\s+', '', text, flags=re.MULTILINE)
+    # Keep bullet points but normalize: *  or -  -> •
+    text = re.sub(r'^[\*\-]\s+', '• ', text, flags=re.MULTILINE)
+    # Remove bracket citations like [1, 2, 3] or [1-7]
+    text = re.sub(r'\s*\[[\d,\s\-]+\]', '', text)
+    return text
 
 
 def format_answer(answer: Answer) -> list[dict]:
     """Format an Answer into Slack Block Kit blocks."""
     blocks = []
 
-    # Split answer text into chunks if needed (Slack 3000 char limit per block)
-    text = answer.text.strip()
+    text = _markdown_to_plain(answer.text.strip())
     chunks = _split_text(text, MAX_TEXT_BLOCK_LENGTH)
 
     for chunk in chunks:

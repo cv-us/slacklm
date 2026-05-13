@@ -1,4 +1,4 @@
-from app.formatter import format_answer, format_sources_list, format_help, _split_text
+from app.formatter import format_answer, format_sources_list, format_help, _split_text, _markdown_to_plain
 from app.notebooklm_client import Answer, Source
 
 
@@ -71,6 +71,26 @@ class TestFormatHelp:
         assert "SlackLM" in text
         assert "sources" in text
         assert "help" in text
+
+
+class TestMarkdownToPlain:
+    def test_removes_bold(self):
+        assert _markdown_to_plain("This is **bold** text") == "This is bold text"
+
+    def test_removes_headings(self):
+        assert _markdown_to_plain("### Heading\nContent") == "Heading\nContent"
+
+    def test_removes_bracket_citations(self):
+        assert _markdown_to_plain("Some fact [1, 2, 3] here") == "Some fact here"
+        assert _markdown_to_plain("Range citation [1-7] end") == "Range citation end"
+
+    def test_normalizes_bullets(self):
+        result = _markdown_to_plain("* Item one\n- Item two")
+        assert "• Item one" in result
+        assert "• Item two" in result
+
+    def test_plain_text_unchanged(self):
+        assert _markdown_to_plain("Just plain text.") == "Just plain text."
 
 
 class TestSplitText:
