@@ -16,20 +16,68 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-KEEPALIVE_INTERVAL_HOURS = 24
+# Google's __Secure-1PSIDTS freshness token must be re-rotated on a ~600s
+# cadence (RotateCookies itself advertises 600s); a session left unrotated
+# for a few hours dies server-side. Each question rotates it too — this
+# loop covers the idle stretches. Keep between 600-900s; never below 60s.
+KEEPALIVE_INTERVAL_SECONDS = 600
+KEEPALIVE_ALERT_AFTER_FAILURES = 2
 
 
-async def cookie_keepalive(nlm_client: NotebookLMWrapper):
-    """Ping NotebookLM daily so Google keeps rotating our session cookies
-    even when nobody is asking questions. Without this, an idle session
-    expires after ~14 days."""
+async def cookie_keepalive(
+    nlm_client: NotebookLMWrapper,
+    slack_client=None,
+    admin_channel: str | None = None,
+):
+    """Rotate the Google session cookies every few minutes so the session
+    survives idle periods. Pings immediately on startup (covers container
+    downtime), then on the interval. If rotation starts failing, the session
+    is dying — optionally alert a Slack admin channel while there may still
+    be time to re-auth."""
+    consecutive_failures = 0
+    alerted = False
     while True:
-        await asyncio.sleep(KEEPALIVE_INTERVAL_HOURS * 3600)
         try:
             await nlm_client.keepalive()
             logger.info("NotebookLM cookie keepalive succeeded")
+            if alerted and slack_client and admin_channel:
+                try:
+                    await slack_client.chat_postMessage(
+                        channel=admin_channel,
+                        text=":white_check_mark: SlackLM: NotebookLM session keepalive recovered.",
+                    )
+                except Exception as e:
+                    logger.warning("Could not post keepalive recovery alert: %s", e)
+            consecutive_failures = 0
+            alerted = False
         except Exception as e:
-            logger.warning("NotebookLM cookie keepalive failed: %s", e)
+            consecutive_failures += 1
+            logger.warning(
+                "NotebookLM cookie keepalive failed (%d consecutive): %s",
+                consecutive_failures,
+                e,
+            )
+            if (
+                consecutive_failures >= KEEPALIVE_ALERT_AFTER_FAILURES
+                and not alerted
+                and slack_client
+                and admin_channel
+            ):
+                try:
+                    await slack_client.chat_postMessage(
+                        channel=admin_channel,
+                        text=(
+                            ":warning: SlackLM: NotebookLM session keepalive has failed "
+                            f"{consecutive_failures} times in a row — the Google session may be dying. "
+                            "Re-authenticate soon: run `notebooklm login` locally, copy "
+                            "`storage_state.json` to `~/slacklm/notebooklm-profile/` on the server, "
+                            "then `docker compose restart`."
+                        ),
+                    )
+                    alerted = True
+                except Exception as alert_err:
+                    logger.warning("Could not post keepalive failure alert: %s", alert_err)
+        await asyncio.sleep(KEEPALIVE_INTERVAL_SECONDS)
 
 
 async def main():
@@ -72,7 +120,9 @@ async def main():
     logger.info("Reply style: %s", config.reply_style)
 
     # Keep Google session cookies fresh during idle periods
-    keepalive_task = asyncio.create_task(cookie_keepalive(nlm_client))
+    keepalive_task = asyncio.create_task(
+        cookie_keepalive(nlm_client, slack_app.client, config.admin_channel)
+    )
 
     # Start Socket Mode
     handler = AsyncSocketModeHandler(slack_app, config.slack_app_token)

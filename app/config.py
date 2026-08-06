@@ -33,6 +33,9 @@ class Config:
     # without an @mention. Off by default so only explicit @mentions (and
     # DMs) consume NotebookLM/Claude usage.
     auto_thread_replies: bool = False
+    # Optional Slack channel ID for operational alerts (e.g., the Google
+    # session is dying and needs re-auth). The bot must be in the channel.
+    admin_channel: str | None = None
 
 
 def load_config(
@@ -54,6 +57,7 @@ def load_config(
     claude_fallback = ClaudeFallbackConfig()
     reply_style = "thread"
     auto_thread_replies = False
+    admin_channel = None
 
     config_file = Path(config_path)
     if config_file.exists():
@@ -83,6 +87,7 @@ def load_config(
             reply_style = "thread"
 
         auto_thread_replies = bool(raw.get("auto_thread_replies", False))
+        admin_channel = raw.get("admin_channel") or None
 
     return Config(
         slack_bot_token=slack_bot_token,
@@ -93,6 +98,7 @@ def load_config(
         claude_fallback=claude_fallback,
         reply_style=reply_style,
         auto_thread_replies=auto_thread_replies,
+        admin_channel=admin_channel,
     )
 
 

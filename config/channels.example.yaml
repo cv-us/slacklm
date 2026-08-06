@@ -32,3 +32,9 @@ reply_style: thread
 # Enabling this also requires the message.channels event subscription and
 # channels:history scope on the Slack app.
 auto_thread_replies: false
+
+# Optional: Slack channel ID for operational alerts. If the Google session
+# starts dying (cookie rotation failing repeatedly), the bot posts a warning
+# here so you can re-authenticate before it goes fully dark. The bot must be
+# invited to this channel.
+# admin_channel: "C0123456789"

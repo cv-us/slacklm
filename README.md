@@ -40,7 +40,7 @@ The bot also responds to direct messages.
 
 **Reply style:** by default the bot replies in a thread under the user's message. Set `reply_style: channel` in `config/channels.yaml` to have it post answers as regular top-level channel messages instead — replies threaded onto the bot's message are then treated as follow-ups.
 
-**Idle keepalive:** the bot pings NotebookLM once a day to keep the Google session cookies rotating even when nobody is asking questions, so the stored login doesn't expire from inactivity.
+**Idle keepalive:** the bot pings NotebookLM every 10 minutes to keep the Google session cookies rotating even when nobody is asking questions. Google's session freshness token (`__Secure-1PSIDTS`) must be re-rotated on a ~10-minute cadence — a session left unrotated for a few hours is invalidated server-side, so this cadence is what keeps the stored login alive for weeks/months. If rotation starts failing repeatedly, the bot can post a warning to a configured `admin_channel` so you can re-authenticate before it goes fully dark.
 
 ---
 
@@ -262,6 +262,14 @@ The bot will auto-restart on reboot (Docker `restart: always` policy).
 ---
 
 ## Maintenance
+
+### Session hygiene (important)
+
+The bot's Google session lives in `notebooklm-profile/storage_state.json` on the server. Google invalidates a session if it sees stale copies of its cookies being replayed, so exactly **one** machine may use a given cookie set:
+
+- After copying `storage_state.json` to the server, **delete the local copy** (`C:\Users\<you>\.notebooklm\profiles\default\storage_state.json`).
+- **Don't run `notebooklm login` or the notebooklm CLI locally while the bot is live** — only when you intend to replace the server's session (login → scp → restart).
+- For extra robustness, consider a dedicated Google account for the bot.
 
 | Task | How |
 |------|-----|
