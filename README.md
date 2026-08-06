@@ -273,7 +273,7 @@ The bot's Google session lives in `notebooklm-profile/storage_state.json` on the
 
 | Task | How |
 |------|-----|
-| **NotebookLM auth expired** | Re-run `notebooklm login` locally, scp new file to `~/slacklm/notebooklm-profile/storage_state.json` on the VM, `docker compose restart`. Note: cookies auto-rotate and persist as long as the profile *directory* is mounted (not the file), so this should be rare — mostly after Google security events or password changes |
+| **NotebookLM auth expired** | 1) `notebooklm login` locally. 2) On the VM: `rm -f ~/slacklm/notebooklm-profile/storage_state.json` (the container rewrites it as root, so it must be deleted before scp can replace it). 3) scp the new file to `~/slacklm/notebooklm-profile/storage_state.json`. 4) `docker compose restart`. 5) Delete the local copy. Should be rare — the 10-minute keepalive keeps sessions alive; this is mostly needed after Google security events or password changes |
 | **Add documents** | Upload PDFs in NotebookLM web UI — no bot restart needed |
 | **Add/change channel mapping** | Edit `config/channels.yaml` on VM, `docker compose restart` |
 | **Update bot code** | `git pull && docker compose up -d --build` |
