@@ -14,6 +14,9 @@ venv/
 storage_state.json
 notebooklm-profile/
 
+# Live config (copy from config/channels.example.yaml)
+config/channels.yaml
+
 # IDE
 .vscode/
 .idea/

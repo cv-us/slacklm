@@ -132,7 +132,13 @@ The notebook ID is the UUID at the end: `1395e9ba-90ba-45b0-a435-761f0e4ce313`
    ANTHROPIC_API_KEY=sk-ant-your-key
    ```
 
-2. Edit `config/channels.yaml` to map your Slack channels to notebooks:
+2. Create your channel config from the example, then map your Slack channels to notebooks:
+   ```bash
+   cp config/channels.example.yaml config/channels.yaml
+   ```
+   `config/channels.yaml` is gitignored — it's your live config and never conflicts with `git pull`.
+
+   Edit it:
    ```yaml
    channels:
      C0123456789:
@@ -281,7 +287,7 @@ slacklm/
 │   ├── claude_client.py     # Claude fallback with tool_use
 │   └── formatter.py         # Slack Block Kit message formatting
 ├── config/
-│   └── channels.yaml        # Channel → notebook mapping
+│   └── channels.example.yaml  # Channel → notebook mapping template (copy to channels.yaml)
 ├── tests/                   # Unit tests
 ├── deploy/
 │   └── setup-oracle.sh      # Oracle Cloud VM setup script
