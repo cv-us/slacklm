@@ -26,6 +26,9 @@ class Config:
     channel_mappings: dict[str, NotebookMapping] = field(default_factory=dict)
     default_notebook: NotebookMapping | None = None
     claude_fallback: ClaudeFallbackConfig = field(default_factory=ClaudeFallbackConfig)
+    # "thread": reply in a thread under the user's message (default)
+    # "channel": post the answer as a regular top-level channel message
+    reply_style: str = "thread"
 
 
 def load_config(
@@ -45,6 +48,7 @@ def load_config(
     channel_mappings: dict[str, NotebookMapping] = {}
     default_notebook: NotebookMapping | None = None
     claude_fallback = ClaudeFallbackConfig()
+    reply_style = "thread"
 
     config_file = Path(config_path)
     if config_file.exists():
@@ -69,6 +73,10 @@ def load_config(
                 model=fallback_raw.get("model", "claude-sonnet-4-6"),
             )
 
+        reply_style = raw.get("reply_style", "thread")
+        if reply_style not in ("thread", "channel"):
+            reply_style = "thread"
+
     return Config(
         slack_bot_token=slack_bot_token,
         slack_app_token=slack_app_token,
@@ -76,6 +84,7 @@ def load_config(
         channel_mappings=channel_mappings,
         default_notebook=default_notebook,
         claude_fallback=claude_fallback,
+        reply_style=reply_style,
     )
 
 

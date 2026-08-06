@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import sys
 
 from slack_bolt.adapter.socket_mode.async_handler import AsyncSocketModeHandler
 from slack_bolt.async_app import AsyncApp
@@ -17,6 +16,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+KEEPALIVE_INTERVAL_HOURS = 24
+
+
+async def cookie_keepalive(nlm_client: NotebookLMWrapper):
+    """Ping NotebookLM daily so Google keeps rotating our session cookies
+    even when nobody is asking questions. Without this, an idle session
+    expires after ~14 days."""
+    while True:
+        await asyncio.sleep(KEEPALIVE_INTERVAL_HOURS * 3600)
+        try:
+            await nlm_client.keepalive()
+            logger.info("NotebookLM cookie keepalive succeeded")
+        except Exception as e:
+            logger.warning("NotebookLM cookie keepalive failed: %s", e)
+
 
 async def main():
     logger.info("Loading configuration...")
@@ -24,6 +38,16 @@ async def main():
 
     # Initialize the Slack app
     slack_app = AsyncApp(token=config.slack_bot_token)
+
+    # Our own user ID, used to avoid double-handling messages that both
+    # mention us and land in a tracked thread
+    bot_user_id = None
+    try:
+        auth = await slack_app.client.auth_test()
+        bot_user_id = auth.get("user_id")
+        logger.info("Bot user ID: %s", bot_user_id)
+    except Exception as e:
+        logger.warning("Could not determine bot user ID: %s", e)
 
     # Initialize NotebookLM client
     nlm_client = NotebookLMWrapper()
@@ -44,7 +68,11 @@ async def main():
     router = QueryRouter(config, nlm_client, claude_client)
 
     # Register Slack event handlers
-    register_handlers(slack_app, config, router)
+    register_handlers(slack_app, config, router, bot_user_id)
+    logger.info("Reply style: %s", config.reply_style)
+
+    # Keep Google session cookies fresh during idle periods
+    keepalive_task = asyncio.create_task(cookie_keepalive(nlm_client))
 
     # Start Socket Mode
     handler = AsyncSocketModeHandler(slack_app, config.slack_app_token)
@@ -53,6 +81,7 @@ async def main():
     try:
         await handler.start_async()
     finally:
+        keepalive_task.cancel()
         await nlm_client.close()
 
 

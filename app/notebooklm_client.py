@@ -35,6 +35,17 @@ class NotebookLMWrapper:
     async def close(self):
         pass
 
+    async def keepalive(self) -> bool:
+        """Open a session and make a trivial call so Google rotates the
+        cookies. Keeps the stored session alive during idle periods (Google
+        expires unused sessions after ~14 days)."""
+
+        async def _ping(client):
+            await client.notebooks.list()
+            return True
+
+        return await self._run_with_client(_ping)
+
     async def ask(self, notebook_id: str, question: str) -> Answer:
         async def _ask(client):
             response = await client.chat.ask(notebook_id, question)

@@ -36,6 +36,12 @@ User @mentions bot in Slack
 
 The bot also responds to direct messages.
 
+**Thread follow-ups:** once the bot has answered in a thread, anyone can keep asking questions in that thread without @mentioning it again. (Thread memory is per-process: after a bot restart, older threads need one fresh @mention.)
+
+**Reply style:** by default the bot replies in a thread under the user's message. Set `reply_style: channel` in `config/channels.yaml` to have it post answers as regular top-level channel messages instead — replies threaded onto the bot's message are then treated as follow-ups.
+
+**Idle keepalive:** the bot pings NotebookLM once a day to keep the Google session cookies rotating even when nobody is asking questions, so the stored login doesn't expire from inactivity.
+
 ---
 
 ## Setup Guide
@@ -62,6 +68,8 @@ The bot also responds to direct messages.
    - Under "Subscribe to bot events", add:
      - `app_mention`
      - `message.im`
+     - `message.channels` (needed for auto-answering thread follow-ups in public channels)
+     - `message.groups` (same, for private channels — optional)
 
 5. **Set Bot Permissions:**
    - Left sidebar → Features → **OAuth & Permissions**
@@ -71,6 +79,8 @@ The bot also responds to direct messages.
      - `im:history`
      - `im:read`
      - `im:write`
+     - `channels:history` (needed for auto-answering thread follow-ups)
+     - `groups:history` (same, for private channels — optional)
 
 6. **Install the App:**
    - Left sidebar → Settings → **Install App** → **Install to Workspace**

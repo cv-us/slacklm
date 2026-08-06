@@ -20,3 +20,10 @@ channels:
 claude_fallback:
   enabled: true
   model: "claude-sonnet-4-6"
+
+# How the bot replies to @mentions in channels:
+#   thread  - reply in a thread under the user's message (default)
+#   channel - post the answer as a regular top-level channel message
+# Either way, replies inside a thread the bot has answered in are
+# auto-answered without needing another @mention.
+reply_style: thread
