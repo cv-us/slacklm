@@ -5,5 +5,9 @@ services:
     env_file:
       - .env
     volumes:
-      - ./storage_state.json:/root/.notebooklm/profiles/default/storage_state.json
+      # Mount the profile DIRECTORY (not the file) so notebooklm-py can
+      # atomically rewrite storage_state.json when Google rotates cookies.
+      # Mounting the single file breaks the temp-file+rename write (EBUSY),
+      # which causes rotated cookies to be lost and auth to expire.
+      - ./notebooklm-profile:/root/.notebooklm/profiles/default
       - ./config/channels.yaml:/app/config/channels.yaml:ro

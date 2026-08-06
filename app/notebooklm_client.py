@@ -23,11 +23,14 @@ class Answer:
 
 class NotebookLMWrapper:
     def __init__(self):
-        pass
+        # Serialize client sessions: each session rotates Google cookies on
+        # init, and concurrent rotations can invalidate each other's session.
+        self._lock = asyncio.Lock()
 
     async def _run_with_client(self, func):
-        async with await NotebookLMClient.from_storage() as client:
-            return await func(client)
+        async with self._lock:
+            async with await NotebookLMClient.from_storage() as client:
+                return await func(client)
 
     async def close(self):
         pass

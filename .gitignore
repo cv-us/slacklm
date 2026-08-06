@@ -12,6 +12,7 @@ venv/
 # Environment and secrets
 .env
 storage_state.json
+notebooklm-profile/
 
 # IDE
 .vscode/

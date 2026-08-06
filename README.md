@@ -210,7 +210,11 @@ cd slacklm
 From your **local machine**, copy config files to the VM:
 ```bash
 scp .env ubuntu@<vm-ip>:~/slacklm/.env
-scp storage_state.json ubuntu@<vm-ip>:~/slacklm/storage_state.json
+# storage_state.json goes inside the notebooklm-profile/ directory
+# (the directory is mounted into the container so cookie rotation can
+#  persist updated cookies back to disk)
+ssh ubuntu@<vm-ip> "mkdir -p ~/slacklm/notebooklm-profile"
+scp storage_state.json ubuntu@<vm-ip>:~/slacklm/notebooklm-profile/storage_state.json
 scp config/channels.yaml ubuntu@<vm-ip>:~/slacklm/config/channels.yaml
 ```
 
@@ -236,7 +240,7 @@ The bot will auto-restart on reboot (Docker `restart: always` policy).
 | Basic question | `@SlackLM what is...?` | Threaded reply with citations |
 | DM | Direct message the bot | Reply with answer |
 | Sources | `@SlackLM sources` | Lists notebook sources |
-| Fallback | Temporarily rename `storage_state.json`, ask a question | Claude answers (may be slower) |
+| Fallback | Temporarily rename `notebooklm-profile/storage_state.json`, ask a question | Claude answers (may be slower) |
 | Logs | `docker compose logs -f` | No errors |
 
 ---
@@ -245,7 +249,7 @@ The bot will auto-restart on reboot (Docker `restart: always` policy).
 
 | Task | How |
 |------|-----|
-| **NotebookLM auth expired** | Re-run `notebooklm login` locally, scp new `storage_state.json` to VM, `docker compose restart` |
+| **NotebookLM auth expired** | Re-run `notebooklm login` locally, scp new file to `~/slacklm/notebooklm-profile/storage_state.json` on the VM, `docker compose restart`. Note: cookies auto-rotate and persist as long as the profile *directory* is mounted (not the file), so this should be rare — mostly after Google security events or password changes |
 | **Add documents** | Upload PDFs in NotebookLM web UI — no bot restart needed |
 | **Add/change channel mapping** | Edit `config/channels.yaml` on VM, `docker compose restart` |
 | **Update bot code** | `git pull && docker compose up -d --build` |
