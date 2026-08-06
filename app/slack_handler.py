@@ -152,9 +152,13 @@ def register_handlers(
             await respond(client, channel, text, thread_ts)
             return
 
-        # Channel messages: only auto-answer replies in threads we're part of.
-        # (Requires the message.channels event subscription + channels:history
-        # scope; without them Slack never delivers these events.)
+        # Channel messages: only auto-answer replies in threads we're part
+        # of, and only when explicitly enabled — otherwise every question
+        # requires an @mention so casual thread chatter doesn't burn usage.
+        # (Also requires the message.channels event subscription +
+        # channels:history scope; without them Slack never delivers these.)
+        if not config.auto_thread_replies:
+            return
         thread_ts = event.get("thread_ts")
         if not thread_ts or not tracker.is_tracked(channel, thread_ts):
             return

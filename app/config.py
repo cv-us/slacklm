@@ -29,6 +29,10 @@ class Config:
     # "thread": reply in a thread under the user's message (default)
     # "channel": post the answer as a regular top-level channel message
     reply_style: str = "thread"
+    # When True, replies in threads the bot has answered are auto-answered
+    # without an @mention. Off by default so only explicit @mentions (and
+    # DMs) consume NotebookLM/Claude usage.
+    auto_thread_replies: bool = False
 
 
 def load_config(
@@ -49,6 +53,7 @@ def load_config(
     default_notebook: NotebookMapping | None = None
     claude_fallback = ClaudeFallbackConfig()
     reply_style = "thread"
+    auto_thread_replies = False
 
     config_file = Path(config_path)
     if config_file.exists():
@@ -77,6 +82,8 @@ def load_config(
         if reply_style not in ("thread", "channel"):
             reply_style = "thread"
 
+        auto_thread_replies = bool(raw.get("auto_thread_replies", False))
+
     return Config(
         slack_bot_token=slack_bot_token,
         slack_app_token=slack_app_token,
@@ -85,6 +92,7 @@ def load_config(
         default_notebook=default_notebook,
         claude_fallback=claude_fallback,
         reply_style=reply_style,
+        auto_thread_replies=auto_thread_replies,
     )
 
 

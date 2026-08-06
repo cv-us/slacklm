@@ -36,7 +36,7 @@ User @mentions bot in Slack
 
 The bot also responds to direct messages.
 
-**Thread follow-ups:** once the bot has answered in a thread, anyone can keep asking questions in that thread without @mentioning it again. (Thread memory is per-process: after a bot restart, older threads need one fresh @mention.)
+**Thread follow-ups (optional, off by default):** with `auto_thread_replies: true` in `config/channels.yaml`, anyone can keep asking questions in a thread the bot has answered without @mentioning it again. Left off, every question requires an explicit @mention so casual thread chatter never triggers the bot. (Thread memory is per-process: after a bot restart, older threads need one fresh @mention.) Enabling this also requires the `message.channels` event and `channels:history` scope on the Slack app.
 
 **Reply style:** by default the bot replies in a thread under the user's message. Set `reply_style: channel` in `config/channels.yaml` to have it post answers as regular top-level channel messages instead — replies threaded onto the bot's message are then treated as follow-ups.
 
@@ -68,7 +68,7 @@ The bot also responds to direct messages.
    - Under "Subscribe to bot events", add:
      - `app_mention`
      - `message.im`
-     - `message.channels` (needed for auto-answering thread follow-ups in public channels)
+     - `message.channels` (only if you enable `auto_thread_replies`)
      - `message.groups` (same, for private channels — optional)
 
 5. **Set Bot Permissions:**
@@ -79,7 +79,7 @@ The bot also responds to direct messages.
      - `im:history`
      - `im:read`
      - `im:write`
-     - `channels:history` (needed for auto-answering thread follow-ups)
+     - `channels:history` (only if you enable `auto_thread_replies`)
      - `groups:history` (same, for private channels — optional)
 
 6. **Install the App:**
