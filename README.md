@@ -92,17 +92,28 @@ The bot also responds to direct messages.
    /invite @SlackLM
    ```
 
-### Step 2: Authenticate NotebookLM
+### Step 2: Authenticate NotebookLM (master-token auth — required for servers)
 
-The bot uses `notebooklm-py` to query your notebooks. Authentication requires a one-time browser login:
+The bot uses `notebooklm-py` to query your notebooks. **Use master-token auth**: plain cookie logins minted on your PC get killed by Google within hours when replayed from a datacenter IP, whereas a master token lets the server mint (and automatically re-mint) its own sessions locally — self-healing, unattended.
+
+One-time bootstrap on your local machine:
 
 ```bash
-pip install "notebooklm-py[browser]"
+pip install --upgrade "notebooklm-py[browser,headless]"
 playwright install chromium
-notebooklm login
+notebooklm login --master-token --account your-email@gmail.com
 ```
 
-A browser window opens — log in with your Google account. This creates a `storage_state.json` file containing your session cookies. Keep this file; you'll need it for deployment.
+A browser window opens at Google's sign-in — log in and wait for verification ("N notebooks"). This writes **two files** into your notebooklm profile dir (`~/.notebooklm/profiles/default/` or `%USERPROFILE%\.notebooklm\profiles\default\`):
+
+- `master_token.json` — durable credential the server uses to mint fresh sessions
+- `storage_state.json` — the current cookie session
+
+Copy **both** to the server. With `master_token.json` present, the client auto-recovers dead sessions with no human involved (the library's layer-4 recovery).
+
+> **Security note:** `master_token.json` is a durable, full-account credential. Strongly consider a **dedicated Google account** for the bot (share your notebooks with it) rather than your personal account. Delete local copies after transferring to the server.
+
+> If Google blocks the automated browser ("This browser or app may not be secure"), launch your own Chrome with `--remote-debugging-port=9222` and retry with `--cdp-url http://localhost:9222`.
 
 ### Step 3: Get Your Notebook ID
 
@@ -226,11 +237,11 @@ cd slacklm
 From your **local machine**, copy config files to the VM:
 ```bash
 scp .env ubuntu@<vm-ip>:~/slacklm/.env
-# storage_state.json goes inside the notebooklm-profile/ directory
-# (the directory is mounted into the container so cookie rotation can
-#  persist updated cookies back to disk)
+# Auth files go inside the notebooklm-profile/ directory (mounted into the
+# container so cookie rotation and master-token re-mints persist to disk)
 ssh ubuntu@<vm-ip> "mkdir -p ~/slacklm/notebooklm-profile"
 scp storage_state.json ubuntu@<vm-ip>:~/slacklm/notebooklm-profile/storage_state.json
+scp master_token.json ubuntu@<vm-ip>:~/slacklm/notebooklm-profile/master_token.json
 scp config/channels.yaml ubuntu@<vm-ip>:~/slacklm/config/channels.yaml
 ```
 
@@ -273,7 +284,7 @@ The bot's Google session lives in `notebooklm-profile/storage_state.json` on the
 
 | Task | How |
 |------|-----|
-| **NotebookLM auth expired** | 1) `notebooklm login` locally. 2) On the VM: `rm -f ~/slacklm/notebooklm-profile/storage_state.json` (the container rewrites it as root, so it must be deleted before scp can replace it). 3) scp the new file to `~/slacklm/notebooklm-profile/storage_state.json`. 4) `docker compose restart`. 5) Delete the local copy. Should be rare — the 10-minute keepalive keeps sessions alive; this is mostly needed after Google security events or password changes |
+| **NotebookLM auth expired** | With `master_token.json` on the server this self-heals automatically — dead sessions re-mint from the master token with no action needed. Manual re-auth is only needed if the master token itself is revoked (password change, security event): re-run `notebooklm login --master-token --account <email>` locally, then on the VM `rm -f ~/slacklm/notebooklm-profile/*.json` (container writes as root), scp both files back up, `docker compose restart`, and delete local copies |
 | **Add documents** | Upload PDFs in NotebookLM web UI — no bot restart needed |
 | **Add/change channel mapping** | Edit `config/channels.yaml` on VM, `docker compose restart` |
 | **Update bot code** | `git pull && docker compose up -d --build` |
