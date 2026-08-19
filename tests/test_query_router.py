@@ -99,6 +99,26 @@ class TestQueryRouter:
 
         assert answer.text == "Claude says 42."
         assert answer.engine == "claude"
+        # NotebookLM should have been retried once before falling back
+        assert nlm.ask.call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_transient_failure_retries_and_succeeds(self):
+        config = make_config()
+        nlm = AsyncMock()
+        nlm.ask.side_effect = [
+            Exception("stream stall: no bytes for 180s"),
+            Answer(text="Second try worked.", engine="notebooklm"),
+        ]
+        claude = AsyncMock()
+
+        router = QueryRouter(config, nlm, claude)
+        answer = await router.query("C001", "question")
+
+        assert answer.text == "Second try worked."
+        assert answer.engine == "notebooklm"
+        assert nlm.ask.call_count == 2
+        claude.ask.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_both_fail(self):

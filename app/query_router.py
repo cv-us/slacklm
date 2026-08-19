@@ -57,14 +57,20 @@ class QueryRouter:
                 engine="system",
             )
 
-        # Try NotebookLM first
-        try:
-            logger.info("Querying NotebookLM notebook '%s' (%s)", notebook.name, notebook.notebook_id)
-            answer = await self._nlm.ask(notebook.notebook_id, question)
-            logger.info("NotebookLM answered successfully")
-            return answer
-        except Exception as e:
-            logger.warning("NotebookLM failed: %s. Trying Claude fallback...", e)
+        # Try NotebookLM first, with one retry: transient server-side stalls
+        # (answer stream never starts) are common enough that a second attempt
+        # usually succeeds, and it's much better than dropping to the fallback.
+        logger.info("Querying NotebookLM notebook '%s' (%s)", notebook.name, notebook.notebook_id)
+        for attempt in (1, 2):
+            try:
+                answer = await self._nlm.ask(notebook.notebook_id, question)
+                logger.info("NotebookLM answered successfully")
+                return answer
+            except Exception as e:
+                if attempt == 1:
+                    logger.warning("NotebookLM failed (attempt 1/2): %s. Retrying...", e)
+                else:
+                    logger.warning("NotebookLM failed after retry: %s. Trying Claude fallback...", e)
 
         # Try Claude fallback
         if self._claude and self._config.claude_fallback.enabled:

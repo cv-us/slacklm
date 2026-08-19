@@ -3,6 +3,7 @@ import re
 from collections import OrderedDict
 
 from slack_bolt.async_app import AsyncApp
+from slack_sdk.errors import SlackApiError
 
 from app.config import Config
 from app.query_router import QueryRouter
@@ -52,8 +53,27 @@ def register_handlers(
     async def respond(client, channel: str, text: str, thread_ts: str | None) -> str:
         """Answer a question or command. thread_ts=None posts top-level.
 
-        Returns the ts of the posted message (usable as a thread root).
+        Returns the ts of the posted message (usable as a thread root), or ""
+        when the channel refuses posts (read-only/announcement channels).
         """
+        try:
+            return await _respond_inner(client, channel, text, thread_ts)
+        except SlackApiError as e:
+            error_code = e.response.get("error") if e.response else str(e)
+            if error_code in (
+                "restricted_action_read_only_channel",
+                "restricted_action",
+                "channel_not_found",
+                "not_in_channel",
+                "is_archived",
+            ):
+                logger.warning(
+                    "Cannot post in channel %s (%s) — skipping reply.", channel, error_code
+                )
+                return ""
+            raise
+
+    async def _respond_inner(client, channel: str, text: str, thread_ts: str | None) -> str:
         command = text.lower().strip()
 
         if command == "help":
@@ -105,11 +125,14 @@ def register_handlers(
         existing_thread = event.get("thread_ts")
 
         if not text:
-            await client.chat_postMessage(
-                channel=channel,
-                thread_ts=existing_thread or event.get("ts"),
-                text="How can I help? Try `@SlackLM help` for usage info.",
-            )
+            try:
+                await client.chat_postMessage(
+                    channel=channel,
+                    thread_ts=existing_thread or event.get("ts"),
+                    text="How can I help? Try `@SlackLM help` for usage info.",
+                )
+            except SlackApiError as e:
+                logger.warning("Cannot post hint in channel %s: %s", channel, e)
             return
 
         if existing_thread:
@@ -121,7 +144,8 @@ def register_handlers(
             # Post the answer as a regular top-level channel message. Replies
             # threaded onto that message become follow-ups.
             posted_ts = await respond(client, channel, text, None)
-            tracker.track(channel, posted_ts)
+            if posted_ts:
+                tracker.track(channel, posted_ts)
         else:
             # Default: reply in a thread under the user's message.
             thread_ts = event.get("ts")
