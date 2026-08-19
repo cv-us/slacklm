@@ -22,11 +22,12 @@ class Answer:
 
 
 # Stall watchdog for the answer stream: abort when NO bytes arrive for this
-# many consecutive seconds. This is a between-bytes timeout, not a total cap —
-# an answer that is streaming (i.e. "thinking") can take as long as it needs;
-# only a stream producing nothing gets killed, so the router's retry can kick
-# in quickly instead of after the library's 180s default.
-CHAT_STALL_TIMEOUT_SECONDS = 20.0
+# many consecutive seconds. This is a between-bytes timeout, not a total cap.
+# NotebookLM delivers answers in bursts with long silent gaps while it works —
+# healthy answers have shown ~43s of silence after connecting — so this must
+# sit above that (20s killed genuine in-flight answers) while still detecting
+# a dead stream 4x faster than the library's 180s default.
+CHAT_STALL_TIMEOUT_SECONDS = 45.0
 
 
 class NotebookLMWrapper:
