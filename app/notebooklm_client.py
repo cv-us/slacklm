@@ -24,10 +24,15 @@ class Answer:
 # Stall watchdog for the answer stream: abort when NO bytes arrive for this
 # many consecutive seconds. This is a between-bytes timeout, not a total cap.
 # NotebookLM delivers answers in bursts with long silent gaps while it works —
-# healthy answers have shown ~43s of silence after connecting — so this must
-# sit above that (20s killed genuine in-flight answers) while still detecting
-# a dead stream 4x faster than the library's 180s default.
-CHAT_STALL_TIMEOUT_SECONDS = 45.0
+# healthy answers have shown ~43s of silence after connecting, and genuinely
+# complex questions can pause longer — so 60s gives real answers headroom
+# while still detecting a dead stream 3x faster than the library's 180s
+# default.
+CHAT_STALL_TIMEOUT_SECONDS = 60.0
+
+# Cap per-source text handed to the Claude fallback: large PDFs (e.g. full
+# code books) can exceed the model's context on their own.
+MAX_SOURCE_CONTENT_CHARS = 150_000
 
 
 class NotebookLMWrapper:
@@ -119,12 +124,23 @@ class NotebookLMWrapper:
 
     async def get_source_content(self, notebook_id: str, source_id: str) -> str:
         async def _get(client):
-            if hasattr(client, "sources") and hasattr(client.sources, "get"):
+            # get_fulltext returns the complete document text (PDFs included);
+            # sources.get only returns metadata, so it's a last resort.
+            if hasattr(client.sources, "get_fulltext"):
+                fulltext = await client.sources.get_fulltext(notebook_id, source_id)
+                content = getattr(fulltext, "content", "") or ""
+            elif hasattr(client.sources, "get"):
                 source = await client.sources.get(notebook_id, source_id)
-                return getattr(source, "content", getattr(source, "text", str(source)))
+                content = getattr(source, "content", getattr(source, "text", "")) or ""
             else:
                 logger.warning("Source content retrieval not available")
                 return ""
+            if len(content) > MAX_SOURCE_CONTENT_CHARS:
+                content = (
+                    content[:MAX_SOURCE_CONTENT_CHARS]
+                    + "\n\n[Content truncated — the document continues beyond this point.]"
+                )
+            return content
 
         try:
             return await self._run_with_client(_get)
