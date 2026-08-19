@@ -29,39 +29,63 @@ TOOLS = [
         },
     },
     {
-        "name": "read_source_content",
+        "name": "get_source_overview",
         "description": (
-            "Read the full text content of a specific source document from the notebook. "
-            "Use the source_id from list_notebook_sources to identify which source to read."
+            "Get a document's total character count plus its BEGINNING (~first "
+            "40,000 chars — usually the cover, table of contents, and early "
+            "sections) and its END (~last 25,000 chars — usually the index or "
+            "annexes). Use the table of contents and index to figure out WHERE "
+            "in the document the answer lives before reading further."
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "notebook_id": {
-                    "type": "string",
-                    "description": "The NotebookLM notebook ID",
-                },
-                "source_id": {
-                    "type": "string",
-                    "description": "The ID of the specific source document to read",
-                },
+                "notebook_id": {"type": "string", "description": "The NotebookLM notebook ID"},
+                "source_id": {"type": "string", "description": "The source document ID"},
             },
             "required": ["notebook_id", "source_id"],
         },
     },
+    {
+        "name": "read_source_section",
+        "description": (
+            "Read a targeted window of a source document starting at a "
+            "character offset. To estimate an offset from the table of "
+            "contents or index: a section that appears halfway through the "
+            "document's structure is at roughly char_count * 0.5. After "
+            "reading a window, check which section you actually landed in and "
+            "adjust the offset up or down. Iterate a few targeted reads "
+            "rather than reading the whole document."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "notebook_id": {"type": "string", "description": "The NotebookLM notebook ID"},
+                "source_id": {"type": "string", "description": "The source document ID"},
+                "start_char": {
+                    "type": "integer",
+                    "description": "Character offset to start reading from (0-based)",
+                },
+                "length": {
+                    "type": "integer",
+                    "description": "How many characters to read (default 50000, max 80000)",
+                },
+            },
+            "required": ["notebook_id", "source_id", "start_char"],
+        },
+    },
 ]
 
-SYSTEM_PROMPT = """You are a helpful knowledge assistant. You answer questions by reading source documents from a NotebookLM notebook.
+SYSTEM_PROMPT = """You are a helpful knowledge assistant. You answer questions by reading source documents from a NotebookLM notebook. The documents are often large reference books (codes, standards, manuals), so navigate them the way an expert would:
 
-Instructions:
-1. First, list the available sources in the notebook using list_notebook_sources.
-2. Based on the question, read the most relevant source documents using read_source_content.
-3. Synthesize an answer from the source content.
-4. Always cite your sources by referencing the document title and quoting relevant passages.
-5. If the sources don't contain enough information to answer the question, say so clearly.
-6. Keep answers concise and focused on what the sources say.
+1. Call list_notebook_sources to see what documents are available.
+2. For the most relevant document(s), call get_source_overview. The beginning usually holds the table of contents; the end usually holds the index. Study both to locate which section/chapter answers the question.
+3. Estimate the character offset of that section (proportional position within the document) and call read_source_section there. Check what section you landed in and adjust the offset until you find the right material. Prefer a few targeted reads over reading everything.
+4. Synthesize the answer strictly from what you actually read.
+5. Always cite the document title and the section number, and quote the relevant passages.
+6. If you cannot find the answer in the sources, say so clearly — never fill gaps with general knowledge.
 
-Format citations like: [Source: "Document Title"]"""
+Format citations like: [Source: "Document Title", Section X.Y]"""
 
 
 class ClaudeFallbackClient:
@@ -77,11 +101,38 @@ class ClaudeFallbackClient:
                 return json.dumps(
                     [{"source_id": s.source_id, "title": s.title} for s in sources]
                 )
-            elif tool_name == "read_source_content":
-                content = await self._nlm.get_source_content(
+            elif tool_name == "get_source_overview":
+                ov = await self._nlm.get_source_overview(
                     tool_input["notebook_id"], tool_input["source_id"]
                 )
-                return content if content else "No content available for this source."
+                if not ov["head"]:
+                    return "No content available for this source."
+                parts = [
+                    f"Document length: {ov['char_count']} characters.",
+                    f"=== BEGINNING (chars 0-{len(ov['head'])}) ===\n{ov['head']}",
+                ]
+                if ov["tail"]:
+                    parts.append(
+                        f"=== END (chars {ov['char_count'] - len(ov['tail'])}-"
+                        f"{ov['char_count']}) ===\n{ov['tail']}"
+                    )
+                else:
+                    parts.append("(The document fits entirely in the excerpt above.)")
+                return "\n\n".join(parts)
+            elif tool_name == "read_source_section":
+                window = await self._nlm.read_source_section(
+                    tool_input["notebook_id"],
+                    tool_input["source_id"],
+                    int(tool_input["start_char"]),
+                    int(tool_input.get("length", 50_000)),
+                )
+                if not window["content"]:
+                    return "No content available at that offset."
+                return (
+                    f"Document length: {window['char_count']} characters. "
+                    f"Showing chars {window['start_char']}-{window['end_char']}:\n\n"
+                    f"{window['content']}"
+                )
             else:
                 return f"Unknown tool: {tool_name}"
         except Exception as e:
@@ -99,7 +150,9 @@ class ClaudeFallbackClient:
             }
         ]
 
-        max_rounds = 10
+        # Navigating a large document takes several tool rounds: overview, a
+        # few targeted section reads (with offset adjustments), then the answer.
+        max_rounds = 16
         for _ in range(max_rounds):
             response = await self._anthropic.messages.create(
                 model=self._model,
