@@ -107,7 +107,7 @@ class TestQueryRouter:
         config = make_config()
         nlm = AsyncMock()
         nlm.ask.side_effect = [
-            Exception("stream stall: no bytes for 180s"),
+            Exception("stream stall: no bytes for 20s"),
             Answer(text="Second try worked.", engine="notebooklm"),
         ]
         claude = AsyncMock()
@@ -119,6 +119,34 @@ class TestQueryRouter:
         assert answer.engine == "notebooklm"
         assert nlm.ask.call_count == 2
         claude.ask.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_on_retry_callback_fires_once(self):
+        config = make_config()
+        nlm = AsyncMock()
+        nlm.ask.side_effect = [
+            Exception("stall"),
+            Answer(text="ok", engine="notebooklm"),
+        ]
+        on_retry = AsyncMock()
+
+        router = QueryRouter(config, nlm, None)
+        answer = await router.query("C001", "question", on_retry=on_retry)
+
+        assert answer.text == "ok"
+        on_retry.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_on_retry_not_fired_on_success(self):
+        config = make_config()
+        nlm = AsyncMock()
+        nlm.ask.return_value = Answer(text="first try", engine="notebooklm")
+        on_retry = AsyncMock()
+
+        router = QueryRouter(config, nlm, None)
+        await router.query("C001", "question", on_retry=on_retry)
+
+        on_retry.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_both_fail(self):

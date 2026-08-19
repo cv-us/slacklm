@@ -21,6 +21,14 @@ class Answer:
     engine: str = "notebooklm"
 
 
+# Stall watchdog for the answer stream: abort when NO bytes arrive for this
+# many consecutive seconds. This is a between-bytes timeout, not a total cap —
+# an answer that is streaming (i.e. "thinking") can take as long as it needs;
+# only a stream producing nothing gets killed, so the router's retry can kick
+# in quickly instead of after the library's 180s default.
+CHAT_STALL_TIMEOUT_SECONDS = 20.0
+
+
 class NotebookLMWrapper:
     def __init__(self):
         # Serialize client sessions: each session rotates Google cookies on
@@ -29,7 +37,9 @@ class NotebookLMWrapper:
 
     async def _run_with_client(self, func):
         async with self._lock:
-            async with await NotebookLMClient.from_storage() as client:
+            async with await NotebookLMClient.from_storage(
+                chat_timeout=CHAT_STALL_TIMEOUT_SECONDS
+            ) as client:
                 return await func(client)
 
     async def close(self):

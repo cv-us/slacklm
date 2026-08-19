@@ -100,8 +100,16 @@ def register_handlers(
             thread_ts=thread_ts,
             text="Thinking...",
         )
+
+        async def show_retry():
+            await client.chat_update(
+                channel=channel,
+                ts=thinking["ts"],
+                text="Still working — the first attempt stalled, retrying...",
+            )
+
         try:
-            answer = await router.query(channel, text)
+            answer = await router.query(channel, text, on_retry=show_retry)
             blocks = format_answer(answer)
             await client.chat_update(
                 channel=channel,

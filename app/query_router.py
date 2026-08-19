@@ -47,7 +47,7 @@ class QueryRouter:
         self._nlm = nlm_client
         self._claude = claude_client
 
-    async def query(self, channel_id: str, raw_text: str) -> Answer:
+    async def query(self, channel_id: str, raw_text: str, on_retry=None) -> Answer:
         override_name, question = parse_message(raw_text, self._config)
         notebook = resolve_notebook(self._config, channel_id, override_name)
 
@@ -69,6 +69,11 @@ class QueryRouter:
             except Exception as e:
                 if attempt == 1:
                     logger.warning("NotebookLM failed (attempt 1/2): %s. Retrying...", e)
+                    if on_retry is not None:
+                        try:
+                            await on_retry()
+                        except Exception as cb_err:
+                            logger.debug("on_retry callback failed: %s", cb_err)
                 else:
                     logger.warning("NotebookLM failed after retry: %s. Trying Claude fallback...", e)
 
